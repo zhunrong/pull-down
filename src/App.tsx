@@ -1,9 +1,10 @@
-import { FC } from "react";
+import { FC, useEffect, useState } from "react";
 import "./App.css";
 import { PullDown } from "./PullDown";
 import star from "./star.jpeg";
+import doge from "./doge.png";
 
-const Banner: FC = () => {
+const Banner: FC<{ loading?: boolean }> = ({ loading }) => {
   return (
     <div
       style={{
@@ -12,19 +13,48 @@ const Banner: FC = () => {
         alignItems: "center",
         justifyContent: "center",
         overflow: "hidden",
+        position: "relative",
       }}
     >
       <img src={star} style={{ height: "100%" }} alt="" />
+      {loading && (
+        <img
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            marginTop: "-32px",
+            marginLeft: "-32px",
+            animation: "doge 0.5s infinite",
+          }}
+          src={doge}
+          alt=""
+        />
+      )}
     </div>
   );
 };
 
 function App() {
+  const [loading, setLoading] = useState(false);
+
+  const onRefresh = () => {
+    return new Promise<void>((resolve) => {
+      // 执行刷新逻辑
+      setLoading(true);
+      setTimeout(() => {
+        setLoading(false);
+        resolve();
+      }, 1000);
+    });
+  };
+
   return (
     <PullDown
       bannerHeight={180}
-      bannerMaxHeight={300}
-      bannerContent={<Banner />}
+      bannerMaxHeight={280}
+      bannerContent={<Banner loading={loading} />}
+      onRefresh={onRefresh}
     >
       <div style={{ padding: "15px" }}>
         Lorem ipsum, dolor sit amet consectetur adipisicing elit. Aut doloremque
