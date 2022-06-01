@@ -15,7 +15,8 @@ const getPageScrollTop = () =>
 export interface PullDownProps {
   bannerHeight?: number;
   bannerMaxHeight?: number;
-  bannerContent?: ReactNode;
+  bannerBg?: ReactNode;
+  bannerLoading?: ReactNode;
   onRefresh?: () => Promise<void>;
 }
 
@@ -24,7 +25,8 @@ export const PullDown: FC<PropsWithChildren<PullDownProps>> = (props) => {
     children,
     bannerHeight = 50,
     bannerMaxHeight = 200,
-    bannerContent,
+    bannerBg,
+    bannerLoading,
     onRefresh,
   } = props;
 
@@ -36,12 +38,14 @@ export const PullDown: FC<PropsWithChildren<PullDownProps>> = (props) => {
   const isRefreshingRef = useRef(false);
   // onRefresh 锁定，避免一直下拉，一直刷新
   const refreshLockRef = useRef(false);
-  // banner 高度
-  const bannerHeightRef = useRef(bannerHeight);
-  // banner element
-  const bannerRef = useRef<HTMLDivElement | null>(null);
+  // banner background element
+  const bannerBgRef = useRef<HTMLDivElement | null>(null);
+  // banner loading element
+  const bannerLoadingRef = useRef<HTMLDivElement | null>(null);
   // root element
   const rootRef = useRef<HTMLDivElement | null>(null);
+  // content element
+  const contentRef = useRef<HTMLDivElement | null>(null);
   // touch 开始 Y 坐标
   const touchStartRef = useRef(0);
 
@@ -54,19 +58,29 @@ export const PullDown: FC<PropsWithChildren<PullDownProps>> = (props) => {
     }
   }, []);
 
-  // 恢复 banner 初始高度
-  const recoverBannerHeight = useCallback(() => {
-    Object.assign(bannerRef.current!.style, {
-      transition: "height 0.35s",
-      height: `${bannerHeight}px`,
+  // 恢复 banner content 初始位置
+  const recoverContentPosition = useCallback(() => {
+    const transform = getComputedStyle(contentRef.current!)
+      .transform.slice(7, -1)
+      .split(", ");
+    if (+transform[5] < 1) return;
+    Object.assign(contentRef.current!.style, {
+      transition: "transform 0.35s",
+      transform: "translate3d(0, 0, 0)",
     });
-    bannerHeightRef.current = bannerHeight;
+    Object.assign(bannerBgRef.current!.style, {
+      transition: "transform 0.35s",
+      transform: `translate3d(-50%, 0, 0) scale(1)`,
+    });
+    Object.assign(bannerLoadingRef.current!.style, {
+      transition: "transform 0.35s",
+      transform: `translate3d(0, 0, 0)`,
+    });
     isTransitionRef.current = true;
-  }, [bannerHeight]);
+  }, []);
 
   const handleTouchEnd = useCallback(
     (event: TouchEvent) => {
-      console.log("touchend");
       // 释放 onRefresh 锁定
       refreshLockRef.current = false;
       if (!isPullingRef.current) return;
@@ -75,10 +89,10 @@ export const PullDown: FC<PropsWithChildren<PullDownProps>> = (props) => {
       const movement = current - touchStartRef.current;
       // 正在刷新的时候暂时不恢复 banner 高度
       if (movement > 0 && !isRefreshingRef.current) {
-        recoverBannerHeight();
+        recoverContentPosition();
       }
     },
-    [recoverBannerHeight]
+    [recoverContentPosition]
   );
 
   const handleTouchMove = useCallback(
@@ -100,17 +114,25 @@ export const PullDown: FC<PropsWithChildren<PullDownProps>> = (props) => {
         return;
 
       const factor = 0.3;
-      const bannerRealHeight = Math.min(
-        bannerHeightRef.current + movement * factor,
-        bannerMaxHeight
-      );
-      Object.assign(bannerRef.current!.style, {
+      const maxOffset = bannerMaxHeight - bannerHeight;
+      const offset = Math.min(movement * factor, maxOffset);
+      const scale = (bannerHeight + offset) / bannerHeight;
+
+      Object.assign(bannerBgRef.current!.style, {
         transition: "",
-        height: `${bannerRealHeight}px`,
+        transform: `translate3d(-50%, 0, 0) scale(${scale})`,
+      });
+      Object.assign(contentRef.current!.style, {
+        transition: "",
+        transform: `translate3d(0, ${offset}px, 0)`,
+      });
+      Object.assign(bannerLoadingRef.current!.style, {
+        transition: "",
+        transform: `translate3d(0, ${offset / 2}px, 0)`,
       });
 
       if (
-        bannerRealHeight === bannerMaxHeight &&
+        offset === maxOffset &&
         typeof onRefresh === "function" &&
         !isRefreshingRef.current
       ) {
@@ -120,14 +142,13 @@ export const PullDown: FC<PropsWithChildren<PullDownProps>> = (props) => {
         onRefresh().then(() => {
           isRefreshingRef.current = false;
           // 这个时候 touch 已经结束，需要自动恢复 banner 高度
-          console.log("lock", refreshLockRef.current);
           if (!refreshLockRef.current) {
-            recoverBannerHeight();
+            recoverContentPosition();
           }
         });
       }
     },
-    [bannerMaxHeight, onRefresh, recoverBannerHeight]
+    [bannerMaxHeight, bannerHeight, onRefresh, recoverContentPosition]
   );
 
   useEffect(() => {
@@ -148,20 +169,60 @@ export const PullDown: FC<PropsWithChildren<PullDownProps>> = (props) => {
   };
 
   const bannerStyle: CSSProperties = {
-    height: bannerHeightRef.current,
+    width: "100%",
+    height: `${bannerHeight}px`,
     willChange: "height",
+    position: "fixed",
+    top: "0",
+  };
+
+  const contentStyle: CSSProperties = {
+    position: "absolute",
+    top: `${bannerHeight}px`,
+    zIndex: 1,
+    background: "#FFF",
+    willChange: "transform",
+    transform: "translate3d(0,0,0)",
   };
 
   return (
-    <div ref={(el) => (rootRef.current = el)} onTouchStart={handleTouchStart}>
+    <div
+      ref={(el) => (rootRef.current = el)}
+      style={{ position: "relative" }}
+      onTouchStart={handleTouchStart}
+    >
+      <div style={bannerStyle}>
+        <div
+          ref={(el) => (bannerBgRef.current = el)}
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: 0,
+            transform: "translate3d(-50%, 0, 0) scale(1)",
+            transformOrigin: "center top",
+          }}
+        >
+          {bannerBg}
+        </div>
+        <div
+          ref={(el) => (bannerLoadingRef.current = el)}
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate3d(0, 0, 0)",
+          }}
+        >
+          {bannerLoading}
+        </div>
+      </div>
       <div
-        ref={(el) => (bannerRef.current = el)}
-        style={bannerStyle}
+        ref={(el) => (contentRef.current = el)}
+        style={contentStyle}
         onTransitionEnd={handleTransitionEnd}
       >
-        {bannerContent}
+        {children}
       </div>
-      <div>{children}</div>
     </div>
   );
 };

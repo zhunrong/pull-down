@@ -52,8 +52,21 @@ function App() {
   return (
     <PullDown
       bannerHeight={180}
-      bannerMaxHeight={280}
-      bannerContent={<Banner loading={loading} />}
+      bannerMaxHeight={240}
+      bannerBg={<img src={star} alt="" />}
+      bannerLoading={
+        loading && (
+          <img
+            style={{
+              marginTop: "-32px",
+              marginLeft: "-32px",
+              animation: "doge 0.5s infinite",
+            }}
+            src={doge}
+            alt=""
+          />
+        )
+      }
       onRefresh={onRefresh}
     >
       <div style={{ padding: "15px" }}>
